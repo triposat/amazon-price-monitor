@@ -1,6 +1,6 @@
 {
   "products": [
-    {"asin": "B07MHJFRBJ", "name": "Bounty Paper Towels", "target_price": 22.00},
+    {"asin": "B07MHJFRBJ", "name": "Bounty Paper Towels", "target_price": 30.00},
     {"asin": "B00NTCH52W", "name": "Amazon Basics AA Batteries", "target_price": 8.99},
     {"asin": "B0CP9YB3Q4", "name": "Stanley Quencher Tumbler", "target_price": 20.00},
     {"asin": "B0BZYCJK89", "name": "Owala FreeSip Water Bottle", "target_price": 25.00}
