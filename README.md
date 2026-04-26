@@ -4,6 +4,32 @@ Runs `check_once.py` every 30 minutes via a free GitHub Actions cron schedule.
 Stores price history in `price_history.json`, which the workflow auto-commits
 back to the repo so state persists between runs.
 
+## Alert policy
+
+A Slack/Discord/email alert fires when **all** of the following are true:
+
+1. Current price is **lower than the lowest price seen in the last 24 hours**
+   (a true new daily low, not just a tick down from the last reading)
+2. The drop is **at least 2% AND at least $1** in absolute terms (filters out
+   noise from cent-level oscillations on cheap items)
+3. **No alert has fired for the same product in the last 6 hours** (prevents
+   notification spam during volatile periods)
+
+If any check fails, the reading is still stored — you just don't get pinged.
+
+The four thresholds are constants at the top of `check_once.py`:
+
+```python
+MIN_DROP_PCT = 2.0
+MIN_DROP_DOLLARS = 1.00
+COOLDOWN_HOURS = 6
+BASELINE_WINDOW_HOURS = 24
+HISTORY_RETENTION_DAYS = 30  # auto-prune readings older than this
+```
+
+Tweak these to taste. Want every 0.1% drop? Set `MIN_DROP_PCT = 0.1`. Want at most
+one alert per product per day? Set `COOLDOWN_HOURS = 24`. Etc.
+
 ## File structure
 
 ```
