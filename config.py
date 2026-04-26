@@ -18,7 +18,6 @@ class ProxyConfig(BaseModel):
 class ProductConfig(BaseModel):
     asin: str
     name: str
-    target_price: float
 
     @field_validator("asin")
     @classmethod

@@ -10,10 +10,10 @@ notifier = apprise.Apprise()
 
 # Each line in APPRISE_URLS is one apprise notification URL.
 # Examples:
+#   slack://TokenA/TokenB/TokenC
 #   discord://webhook_id/webhook_token
 #   tgram://bot_token/chat_id
 #   mailto://user:app_password@gmail.com?to=you@gmail.com
-#   slack://token_a/token_b/token_c/#channel
 # Full list: https://github.com/caronc/apprise/wiki
 for url in os.environ.get("APPRISE_URLS", "").strip().splitlines():
     url = url.strip()
@@ -21,18 +21,24 @@ for url in os.environ.get("APPRISE_URLS", "").strip().splitlines():
         notifier.add(url)
 
 
-def send_alert(result: PriceResult, product: ProductConfig):
-    title = f"Price Drop: {result.title[:50]}"
+def send_alert(result: PriceResult, product: ProductConfig, prior_price: float):
+    """Send a price-drop alert. Caller has already verified current < prior."""
+    drop = prior_price - result.price
+    pct = (drop / prior_price) * 100
+
+    title = f"Price Drop: {product.name}"
     body = (
-        f"Product: {result.title}\n"
-        f"Current Price: ${result.price:.2f}\n"
-        f"Target Price: ${product.target_price:.2f}\n"
-        f"You Save: ${product.target_price - result.price:.2f}\n"
+        f"{result.title}\n\n"
+        f"Previous: ${prior_price:.2f}\n"
+        f"Current:  ${result.price:.2f}\n"
+        f"Drop:     ${drop:.2f} (-{pct:.2f}%)\n"
         f"\nhttps://www.amazon.com/dp/{result.asin}\n"
     )
 
     if len(notifier) > 0:
         notifier.notify(title=title, body=body)
-        logger.success(f"Alert sent for {result.asin} — ${result.price:.2f}")
+        logger.success(
+            f"Alert sent for {result.asin} — ${result.price:.2f} (was ${prior_price:.2f})"
+        )
     else:
-        logger.warning(f"No notification services configured! Price alert: {title}")
+        logger.warning(f"No notification services configured! {title}")
