@@ -39,7 +39,7 @@ one alert per product per day? Set `COOLDOWN_HOURS = 24`. Etc.
 ├── scraper.py                      # curl_cffi scraper (TLS impersonation)
 ├── alerts.py                       # apprise multi-channel alerts (env-driven)
 ├── check_once.py                   # entry point — single-shot price check
-├── products.json                   # ASINs to monitor + target prices
+├── products.json                   # ASINs to monitor (just asin + name; no targets)
 ├── requirements.txt
 ├── .gitignore
 └── price_history.json              # auto-created by first run
@@ -90,13 +90,13 @@ https://github.com/caronc/apprise/wiki
 
 ### 4. Edit `products.json`
 
-Replace the example ASINs with the products you actually care about. Each entry:
+Replace the example ASINs with the products you actually care about. Each entry just needs `asin` and a friendly `name`:
 
 ```json
-{"asin": "B07MHJFRBJ", "name": "Friendly name", "target_price": 22.00}
+{"asin": "B07MHJFRBJ", "name": "Bounty Paper Towels"}
 ```
 
-Commit and push.
+No target prices — alerts fire on any meaningful drop (see thresholds at the top of `check_once.py`). Commit and push.
 
 ### 5. Trigger the first run manually
 
@@ -136,7 +136,7 @@ In `.github/workflows/monitor.yml`, change the cron:
 
 - **Workflow run failed** → click the run, expand the failed step, read the log.
   Most failures are missing/malformed `PROXIES` or `APPRISE_URLS` secrets.
-- **No alerts firing even with target hits** → check `APPRISE_URLS` is set and
-  your notification channel is live (test it manually with `apprise -vv -t "test" -b "body" "your-url"`).
+- **No alerts firing even when prices drop** → check `APPRISE_URLS` is set and
+  your notification channel is live (test it manually with `apprise -vv -t "test" -b "body" "your-url"`). Also check whether the drop actually crossed the thresholds in `check_once.py` — a $0.10 drop on a $30 item won't trigger an alert by default.
 - **Workflow stuck "queued"** → GitHub free runners are sometimes slow during
   peak hours; usually clears in 5–15 minutes.
