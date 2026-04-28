@@ -1,27 +1,28 @@
 # Amazon Price Monitor (GitHub Actions edition)
 
 A scheduled price monitor that runs `check_once.py` every 30 minutes on free
-GitHub Actions. Each run appends results to `price_history.json`, and the
-workflow commits this file back to the repository so price history is preserved
+GitHub Actions. Each run adds new results to `price_history.json`, and the
+workflow commits this file back to the repository so the history is kept
 between runs.
 
-## Alert policy
+## Alert thresholds
 
-An alert is sent (to Slack, Discord, email, or any other supported channel)
-when **all** of the following conditions are true:
+The workflow sends an alert (to Slack, Discord, email, or any other supported
+channel) when **all** of the following conditions are true:
 
 1. The current price is **lower than the lowest price recorded in the last
    24 hours**. This is a new 24-hour low, not a small change from the previous
    reading.
-2. The drop is **at least 2% and at least $1** in absolute terms. This filters
-   out small fluctuations of a few cents on low-cost items.
+2. The drop is **at least 2% and at least $1**. This filters out small changes
+   of a few cents on low-cost items.
 3. **No alert has been sent for the same product in the last 6 hours.** This
-   prevents repeated notifications when prices change frequently.
+   prevents repeated notifications when prices change often.
 
-If any condition is not met, the reading is still saved to history, but no
-notification is sent.
+If any condition fails, the script still saves the reading to history but does
+not send a notification.
 
-The thresholds are defined as constants near the top of `check_once.py`:
+These three limits, plus the history retention setting, are defined as
+constants near the top of `check_once.py`:
 
 ```python
 MIN_DROP_PCT = 2.0
@@ -103,15 +104,15 @@ https://github.com/caronc/apprise/wiki
 ### 4. Edit `products.json`
 
 Replace the example ASINs with the products you want to monitor. Each entry
-requires two fields: `asin` and a human-readable `name`:
+needs two fields: `asin` and a `name` you can recognize:
 
 ```json
 {"asin": "B07MHJFRBJ", "name": "Bounty Paper Towels"}
 ```
 
-There is no target price field. Alerts are triggered when a price drop crosses
-the thresholds defined in `check_once.py`. Commit and push your changes when
-finished.
+There is no target price field. An alert fires when a price drop crosses the
+thresholds defined in `check_once.py`. Commit and push your changes when you
+are done.
 
 ### 5. Trigger the first run manually
 
@@ -123,18 +124,18 @@ configured correctly. After this, runs happen automatically every 30 minutes.
 
 - **Scheduled runs are not exact.** GitHub may delay cron triggers by 10 to 30
   minutes during periods of high load. For routine price monitoring this is
-  acceptable. For time-sensitive cases such as flash sales, a dedicated server
-  is recommended instead.
-- **Workflows are paused after 60 days of repository inactivity.** This
+  acceptable. For time-sensitive cases such as flash sales, use a dedicated
+  server instead.
+- **GitHub pauses workflows after 60 days of repository inactivity.** This
   workflow's automatic commits count as activity, so the schedule does not
   pause in normal use.
 - **The GitHub free tier provides 2,000 Actions minutes per month for private
   repositories.** Each run takes about 1 minute. With 48 runs per day across
-  30 days, monthly usage is approximately 1,440 minutes, which is below the
-  free tier limit. Public repositories have unlimited minutes.
-- **A concurrency lock is configured in the workflow.** This prevents two runs
-  from writing to `price_history.json` at the same time, which could happen if
-  a slow run overlaps with the next scheduled run.
+  30 days, monthly usage is about 1,440 minutes, which is below the free tier
+  limit. Public repositories have unlimited minutes.
+- **The workflow includes a concurrency lock.** This prevents two runs from
+  writing to `price_history.json` at the same time. Without the lock, this
+  could happen when a slow run overlaps with the next scheduled run.
 
 ## Changing the monitored products
 
@@ -157,7 +158,7 @@ Edit the `cron` value in `.github/workflows/monitor.yml`:
   the failed step, and read the log output. Most failures are caused by a
   missing or incorrectly formatted `PROXIES` or `APPRISE_URLS` secret.
 - **No alerts are sent even when prices drop.** Confirm that `APPRISE_URLS` is
-  configured and that your notification channel is reachable. You can test the
+  configured and that your notification channel is working. You can test the
   channel from the command line:
 
   ```bash
