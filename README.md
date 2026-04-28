@@ -1,58 +1,66 @@
 # Amazon Price Monitor (GitHub Actions edition)
 
-Runs `check_once.py` every 30 minutes via a free GitHub Actions cron schedule.
-Stores price history in `price_history.json`, which the workflow auto-commits
-back to the repo so state persists between runs.
+A scheduled price monitor that runs `check_once.py` every 30 minutes on free
+GitHub Actions. Each run appends results to `price_history.json`, and the
+workflow commits this file back to the repository so price history is preserved
+between runs.
 
 ## Alert policy
 
-A Slack/Discord/email alert fires when **all** of the following are true:
+An alert is sent (to Slack, Discord, email, or any other supported channel)
+when **all** of the following conditions are true:
 
-1. Current price is **lower than the lowest price seen in the last 24 hours**
-   (a true new daily low, not just a tick down from the last reading)
-2. The drop is **at least 2% AND at least $1** in absolute terms (filters out
-   noise from cent-level oscillations on cheap items)
-3. **No alert has fired for the same product in the last 6 hours** (prevents
-   notification spam during volatile periods)
+1. The current price is **lower than the lowest price recorded in the last
+   24 hours**. This is a new 24-hour low, not a small change from the previous
+   reading.
+2. The drop is **at least 2% and at least $1** in absolute terms. This filters
+   out small fluctuations of a few cents on low-cost items.
+3. **No alert has been sent for the same product in the last 6 hours.** This
+   prevents repeated notifications when prices change frequently.
 
-If any check fails, the reading is still stored — you just don't get pinged.
+If any condition is not met, the reading is still saved to history, but no
+notification is sent.
 
-The four thresholds are constants at the top of `check_once.py`:
+The thresholds are defined as constants near the top of `check_once.py`:
 
 ```python
 MIN_DROP_PCT = 2.0
 MIN_DROP_DOLLARS = 1.00
 COOLDOWN_HOURS = 6
 BASELINE_WINDOW_HOURS = 24
-HISTORY_RETENTION_DAYS = 30  # auto-prune readings older than this
+HISTORY_RETENTION_DAYS = 30  # readings older than this are deleted automatically
 ```
 
-Tweak these to taste. Want every 0.1% drop? Set `MIN_DROP_PCT = 0.1`. Want at most
-one alert per product per day? Set `COOLDOWN_HOURS = 24`. Etc.
+Adjust these values as needed. For example:
+
+- To alert on any drop of 0.1% or larger, set `MIN_DROP_PCT = 0.1`.
+- To allow at most one alert per product per day, set `COOLDOWN_HOURS = 24`.
 
 ## File structure
 
 ```
 .
-├── .github/workflows/monitor.yml   # cron schedule + run logic
-├── config.py                       # loads proxies from env, validates products
+├── .github/workflows/monitor.yml   # cron schedule and run logic
+├── config.py                       # loads proxies from environment, validates products
 ├── scraper.py                      # curl_cffi scraper (TLS impersonation)
-├── alerts.py                       # apprise multi-channel alerts (env-driven)
-├── check_once.py                   # entry point — single-shot price check
-├── products.json                   # ASINs to monitor (just asin + name; no targets)
+├── alerts.py                       # Apprise multi-channel alerts (configured via env)
+├── check_once.py                   # entry point: runs one price check per execution
+├── products.json                   # list of ASINs to monitor (asin and name fields only)
 ├── requirements.txt
 ├── .gitignore
-└── price_history.json              # auto-created by first run
+└── price_history.json              # created automatically on the first run
 ```
 
-## Setup (one-time, ~10 minutes)
+## Setup (one-time, about 10 minutes)
 
-### 1. Create a new private GitHub repo
+### 1. Create a private GitHub repository
 
-Don't make it public — `price_history.json` will be committed automatically
-and you probably don't want your purchasing patterns indexed by Google.
+Use a private repository, not a public one. The workflow commits
+`price_history.json` automatically, which records the products you monitor and
+their price changes over time. A private repository keeps this data out of
+search engine indexes.
 
-### 2. Push these files to it
+### 2. Push these files to the repository
 
 ```bash
 cd path/to/this/folder
@@ -66,9 +74,11 @@ git push -u origin main
 
 ### 3. Add two GitHub Secrets
 
-Go to **Settings → Secrets and variables → Actions → New repository secret**.
+In your repository, go to **Settings → Secrets and variables → Actions → New repository secret**, then add the following two secrets.
 
-**Secret 1: `PROXIES`** — one proxy per line, format `host:port:user:password`:
+**Secret 1: `PROXIES`**
+
+One proxy per line, in the format `host:port:user:password`:
 
 ```
 69.54.248.46:59544:your_user:your_pass
@@ -77,7 +87,9 @@ Go to **Settings → Secrets and variables → Actions → New repository secret
 ...
 ```
 
-**Secret 2: `APPRISE_URLS`** — one notification channel per line. Pick at least one:
+**Secret 2: `APPRISE_URLS`**
+
+One notification channel URL per line. At least one channel is required:
 
 ```
 discord://webhook_id/webhook_token
@@ -85,58 +97,76 @@ tgram://bot_token/chat_id
 mailto://you:app_password@gmail.com?to=you@gmail.com
 ```
 
-Full list of supported channel URL formats:
+For the full list of supported notification channels and their URL formats, see the Apprise wiki:
 https://github.com/caronc/apprise/wiki
 
 ### 4. Edit `products.json`
 
-Replace the example ASINs with the products you actually care about. Each entry just needs `asin` and a friendly `name`:
+Replace the example ASINs with the products you want to monitor. Each entry
+requires two fields: `asin` and a human-readable `name`:
 
 ```json
 {"asin": "B07MHJFRBJ", "name": "Bounty Paper Towels"}
 ```
 
-No target prices — alerts fire on any meaningful drop (see thresholds at the top of `check_once.py`). Commit and push.
+There is no target price field. Alerts are triggered when a price drop crosses
+the thresholds defined in `check_once.py`. Commit and push your changes when
+finished.
 
 ### 5. Trigger the first run manually
 
-Go to the **Actions** tab → **Amazon Price Monitor** → **Run workflow**. This
-verifies your secrets are set correctly. Subsequent runs happen automatically
-every 30 minutes.
+Open the **Actions** tab in your repository, select **Amazon Price Monitor**,
+and click **Run workflow**. This first run confirms that your secrets are
+configured correctly. After this, runs happen automatically every 30 minutes.
 
-## Caveats worth knowing
+## Important limitations
 
-- **GitHub schedule precision is loose.** Cron triggers can be delayed by
-  10–30 minutes during high load. For price monitoring this is fine; for
-  flash-deal hunting you'd want a dedicated server.
-- **Scheduled workflows pause after 60 days of repo inactivity.** The auto-commits
-  this workflow makes count as activity, so this won't bite you in practice.
-- **GitHub free tier gives 2,000 Actions minutes/month for private repos.**
-  Each run takes ~1 minute. 48 runs/day × 30 days = ~1,440 minutes — comfortably
-  under the limit, with headroom for retries. (Public repos: unlimited.)
-- **Concurrency lock** in the workflow prevents two runs from racing on
-  `price_history.json` if a long-running check overlaps with the next schedule.
+- **Scheduled runs are not exact.** GitHub may delay cron triggers by 10 to 30
+  minutes during periods of high load. For routine price monitoring this is
+  acceptable. For time-sensitive cases such as flash sales, a dedicated server
+  is recommended instead.
+- **Workflows are paused after 60 days of repository inactivity.** This
+  workflow's automatic commits count as activity, so the schedule does not
+  pause in normal use.
+- **The GitHub free tier provides 2,000 Actions minutes per month for private
+  repositories.** Each run takes about 1 minute. With 48 runs per day across
+  30 days, monthly usage is approximately 1,440 minutes, which is below the
+  free tier limit. Public repositories have unlimited minutes.
+- **A concurrency lock is configured in the workflow.** This prevents two runs
+  from writing to `price_history.json` at the same time, which could happen if
+  a slow run overlaps with the next scheduled run.
 
-## Editing what's monitored
+## Changing the monitored products
 
-Just edit `products.json` and push. The next scheduled run picks up the new list
-automatically. No deploy step.
+Edit `products.json` and push the change to the repository. The next scheduled
+run will use the updated list. No additional deployment step is required.
 
-## Adjusting cadence
+## Changing the run frequency
 
-In `.github/workflows/monitor.yml`, change the cron:
+Edit the `cron` value in `.github/workflows/monitor.yml`:
 
 ```yaml
 - cron: "*/15 * * * *"   # every 15 minutes
-- cron: "0 * * * *"       # every hour
-- cron: "0 */6 * * *"     # every 6 hours
+- cron: "0 * * * *"      # every hour
+- cron: "0 */6 * * *"    # every 6 hours
 ```
 
 ## Troubleshooting
 
-- **Workflow run failed** → click the run, expand the failed step, read the log.
-  Most failures are missing/malformed `PROXIES` or `APPRISE_URLS` secrets.
-- **No alerts firing even when prices drop** → check `APPRISE_URLS` is set and
-  your notification channel is live (test it manually with `apprise -vv -t "test" -b "body" "your-url"`). Also check whether the drop actually crossed the thresholds in `check_once.py` — a $0.10 drop on a $30 item won't trigger an alert by default.
-- **Workflow stuck "queued"** → GitHub free runners are sometimes slow during
-  peak hours; usually clears in 5–15 minutes.
+- **The workflow run failed.** Open the failed run in the Actions tab, expand
+  the failed step, and read the log output. Most failures are caused by a
+  missing or incorrectly formatted `PROXIES` or `APPRISE_URLS` secret.
+- **No alerts are sent even when prices drop.** Confirm that `APPRISE_URLS` is
+  configured and that your notification channel is reachable. You can test the
+  channel from the command line:
+
+  ```bash
+  apprise -vv -t "test" -b "body" "your-url"
+  ```
+
+  Also verify that the price drop crosses the thresholds in `check_once.py`.
+  For example, a $0.10 drop on a $30 item is below the default 2% threshold
+  and will not trigger an alert.
+- **The workflow is stuck in the "queued" state.** GitHub's free runners can
+  be delayed during periods of high demand. The queue typically clears within
+  5 to 15 minutes.
