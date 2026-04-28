@@ -2,7 +2,7 @@
 
 A scheduled price monitor that runs `check_once.py` every 30 minutes on free
 GitHub Actions. Each run adds new results to `price_history.json`, and the
-workflow commits this file back to the repository so the history is kept
+workflow commits this file back to the repository so the history is preserved
 between runs.
 
 ## Alert thresholds
@@ -32,7 +32,7 @@ BASELINE_WINDOW_HOURS = 24
 HISTORY_RETENTION_DAYS = 30  # readings older than this are deleted automatically
 ```
 
-Adjust these values as needed. For example:
+Adjust these values to change the alert behavior. For example:
 
 - To alert on any drop of 0.1% or larger, set `MIN_DROP_PCT = 0.1`.
 - To allow at most one alert per product per day, set `COOLDOWN_HOURS = 24`.
@@ -54,7 +54,7 @@ Adjust these values as needed. For example:
 
 ## Setup (one-time, about 10 minutes)
 
-Fork this repository (or clone it locally) so you have the starter files. Then follow the steps below to wire up your own copy.
+Fork this repository (or clone it locally) so you have the starter files. Then follow these steps to configure your own copy.
 
 ### 1. Create a private GitHub repository
 
@@ -106,13 +106,13 @@ https://github.com/caronc/apprise/wiki
 ### 4. Edit `products.json`
 
 Replace the example ASINs with the products you want to monitor. Each entry
-needs two fields: `asin` and a `name` you can recognize:
+needs two fields: `asin` and a recognizable `name`:
 
 ```json
 {"asin": "B07MHJFRBJ", "name": "Bounty Paper Towels"}
 ```
 
-There is no target price field. An alert fires when a price drop crosses the
+There is no target price field. An alert is sent when a price drop crosses the
 thresholds defined in `check_once.py`. Commit and push your changes when you
 are done.
 
