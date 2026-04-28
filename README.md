@@ -81,9 +81,9 @@ In your repository, go to **Settings → Secrets and variables → Actions → N
 One proxy per line, in the format `host:port:user:password`:
 
 ```
-69.54.248.46:59544:your_user:your_pass
-69.54.250.138:58372:your_user:your_pass
-69.54.250.14:65040:your_user:your_pass
+proxy1.example.com:8000:your_user:your_pass
+proxy2.example.com:8001:your_user:your_pass
+proxy3.example.com:8002:your_user:your_pass
 ...
 ```
 
