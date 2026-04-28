@@ -1,4 +1,4 @@
-# Amazon Price Monitor (GitHub Actions edition)
+# Amazon Price Monitor
 
 A scheduled price monitor that runs `check_once.py` every 30 minutes on free
 GitHub Actions. Each run adds new results to `price_history.json`, and the
