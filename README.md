@@ -54,6 +54,8 @@ Adjust these values as needed. For example:
 
 ## Setup (one-time, about 10 minutes)
 
+Fork this repository (or clone it locally) so you have the starter files. Then follow the steps below to wire up your own copy.
+
 ### 1. Create a private GitHub repository
 
 Use a private repository, not a public one. The workflow commits
