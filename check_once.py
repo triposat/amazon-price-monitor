@@ -1,11 +1,11 @@
-# check_once.py: single-shot price check, designed to be invoked by cron/GitHub Actions
+# check_once.py: single-shot price check, designed to be invoked by cron or GitHub Actions.
 #
-# Alert policy:
-#   Fire a Slack alert when current price is a new low vs. the last 24 hours
-#   AND the drop is meaningful (>= 2% AND >= $1)
-#   AND we haven't already alerted on this product in the last 6 hours.
+# Alert policy: send a Slack alert when all three conditions are true:
+#   1. The current price is a new low compared to the last 24 hours.
+#   2. The drop is at least 2% AND at least $1 (the stricter limit applies).
+#   3. No alert has been sent for this product in the last 6 hours.
 #
-# Tune the constants below to taste.
+# Adjust the constants below to change the alert behavior.
 
 import sys
 import json
@@ -18,13 +18,11 @@ from config import ProductConfig
 from alerts import send_alert
 
 
-# ─── Tunable thresholds ────────────────────────────────────────────────
-MIN_DROP_PCT = 2.0          # only alert on drops >= 2% from baseline
-MIN_DROP_DOLLARS = 1.00     # AND >= $1 absolute (whichever is tighter wins)
-COOLDOWN_HOURS = 6          # don't re-alert on the same product within 6h
-BASELINE_WINDOW_HOURS = 24  # baseline = lowest price seen in last 24h
-HISTORY_RETENTION_DAYS = 30 # auto-delete readings older than 30 days
-# ───────────────────────────────────────────────────────────────────────
+MIN_DROP_PCT = 2.0          # alert only on drops of at least 2% from baseline
+MIN_DROP_DOLLARS = 1.00     # AND at least $1 in absolute terms
+COOLDOWN_HOURS = 6          # do not re-alert on the same product within 6 hours
+BASELINE_WINDOW_HOURS = 24  # baseline = lowest price seen in the last 24 hours
+HISTORY_RETENTION_DAYS = 30 # readings older than this are removed automatically
 
 
 logger.remove()
@@ -34,7 +32,7 @@ ProductList = TypeAdapter(list[ProductConfig])
 
 
 def prune_old_entries(db, retention_days=HISTORY_RETENTION_DAYS):
-    """Delete readings older than retention_days. Keeps file size bounded."""
+    """Delete readings older than retention_days. Keeps the file size bounded."""
     P = Query()
     cutoff = (datetime.now() - timedelta(days=retention_days)).isoformat()
     removed = db.remove(P.timestamp < cutoff)
@@ -43,7 +41,7 @@ def prune_old_entries(db, retention_days=HISTORY_RETENTION_DAYS):
 
 
 def get_baseline_price(db, asin, window_hours=BASELINE_WINDOW_HOURS):
-    """Lowest price for this ASIN in the last `window_hours`, or None if no recent data."""
+    """Return the lowest price seen for this ASIN in the last window_hours, or None."""
     P = Query()
     cutoff = (datetime.now() - timedelta(hours=window_hours)).isoformat()
     recent = db.search((P.asin == asin) & (P.timestamp >= cutoff))
@@ -52,7 +50,7 @@ def get_baseline_price(db, asin, window_hours=BASELINE_WINDOW_HOURS):
 
 
 def get_last_alert_time(db, asin):
-    """Timestamp of the most recent reading we alerted on for this ASIN, or None."""
+    """Return the timestamp of the most recent reading we alerted on, or None."""
     P = Query()
     alerted = db.search((P.asin == asin) & (P.alerted == True))  # noqa: E712
     if not alerted:
@@ -62,7 +60,7 @@ def get_last_alert_time(db, asin):
 
 
 def decide(current, baseline, last_alert_at, now):
-    """Pure function: return (should_alert, reason_string)."""
+    """Pure function. Returns (should_alert, reason_string)."""
     if baseline is None:
         return False, "no recent baseline (re-establishing)"
 
@@ -125,14 +123,16 @@ def main():
         successes += 1
 
         if should_alert:
-            assert baseline is not None  # decide() guarantees this when should_alert=True
+            # decide() only returns True when baseline is not None,
+            # so the assertion is safe and silences type checkers.
+            assert baseline is not None
             logger.success(
                 f"PRICE DROP! {product.name}: ${current:.2f} | {reason}"
             )
             send_alert(result, product, baseline)
             drops_alerted += 1
         elif baseline is not None and current < baseline:
-            # Drop occurred but was suppressed by threshold/cooldown
+            # A drop happened but did not meet the threshold or the cooldown.
             logger.info(f"{product.name}: ${current:.2f} | suppressed: {reason}")
             drops_suppressed += 1
         else:

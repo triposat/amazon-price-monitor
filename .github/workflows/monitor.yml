@@ -2,16 +2,17 @@ name: Amazon Price Monitor
 
 on:
   schedule:
-    # Runs every 30 minutes. GitHub may delay scheduled runs by several
-    # minutes during high load. This is normal, not a bug.
+    # Runs every 30 minutes. GitHub may delay the actual start by several
+    # minutes under high load. This is normal, not a bug.
     - cron: "*/30 * * * *"
   workflow_dispatch:  # adds a "Run workflow" button on the Actions tab
 
-# Workflow needs to commit price_history.json back to the repo
+# The workflow commits price_history.json back to the repo after each run.
 permissions:
   contents: write
 
-# Don't allow two checks to run concurrently because they'd race on price_history.json
+# Prevent two checks from running at the same time. Concurrent writes to
+# price_history.json would corrupt the file.
 concurrency:
   group: price-monitor
   cancel-in-progress: false

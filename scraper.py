@@ -1,4 +1,4 @@
-# scraper.py: Amazon scraper with curl_cffi TLS impersonation + ISP proxy rotation
+# scraper.py: Amazon scraper with curl_cffi TLS impersonation and ISP proxy rotation
 
 import json
 import re
@@ -26,15 +26,20 @@ class PriceResult(BaseModel):
 
 
 class RetryableError(Exception):
-    """Server-side transient error or anti-bot challenge. Worth retrying with a fresh proxy."""
+    """Temporary server-side error or anti-bot challenge.
+
+    Raising this signals the retry decorator to try again with the next
+    proxy in the pool. Permanent errors raise a plain Exception instead.
+    """
 
 
-# Primary parser: Amazon embeds a JSON pricing blob in this hidden div on most product pages.
-# Format: {"desktop_buybox_group_1": [{"displayPrice": "$24.42", "priceAmount": 24.42, "buyingOptionType": "NEW", ...}]}
-# More stable than CSS selectors because Amazon embeds it for their internal "twister" variant-picker JS.
+# Amazon embeds price data in a hidden div on most product pages, in this format:
+#   {"desktop_buybox_group_1": [{"priceAmount": 24.42, "buyingOptionType": "NEW", ...}]}
+# This is more reliable than CSS selectors because Amazon's variant-picker UI
+# (called "twister" internally, hence the class name) depends on it.
 PRICE_JSON_SELECTOR = ".twister-plus-buying-options-price-data"
 
-# Fallback CSS selectors for pages where the JSON blob is missing.
+# Used as fallback when the JSON data above is missing on a given page.
 PRICE_SELECTORS = [
     "span.a-price .a-offscreen",
     ".priceToPay .a-offscreen",
@@ -64,7 +69,7 @@ class AmazonPriceScraper:
     @retry(
         stop=stop_after_attempt(MAX_RETRIES),
         wait=wait_random(min=3, max=10),
-        retry=retry_if_exception_type(RetryableError),  # only retry transient/anti-bot, not 4xx
+        retry=retry_if_exception_type(RetryableError),
     )
     def fetch_product_page(self, asin):
         url = f"https://www.amazon.com/dp/{asin}"
@@ -74,21 +79,25 @@ class AmazonPriceScraper:
             url, proxy=proxy, timeout=REQUEST_TIMEOUT, impersonate="chrome",
         )
 
+        # 404 means the product page is gone. Skip it without retrying.
         if response.status_code == 404:
             logger.warning(f"Product {asin} not found (404)")
-            return None  # permanent, skip and don't retry
+            return None
 
+        # 429 (rate limited) and 5xx (server errors) are temporary. Retry.
         if response.status_code == 429:
             raise RetryableError(f"Rate limited (429) for {asin}")
-
         if 500 <= response.status_code < 600:
             raise RetryableError(f"Server error {response.status_code} for {asin}")
 
+        # Other 4xx codes (403 Forbidden, 410 Gone, and so on) are permanent.
+        # Raise a plain Exception so the retry loop stops at the first attempt.
         if response.status_code != 200:
-            # 4xx other than 404 or 429 (such as 403 Forbidden, 410 Gone). Terminal, no retry.
             raise Exception(f"Permanent HTTP error {response.status_code} for {asin}")
 
-        # Anti-bot detection: Amazon serves multiple block-page variants
+        # Amazon serves several block-page variants when it detects automation.
+        # The "dog page" carries an API support email; the soft challenge shows
+        # a captcha validation URL or asks the user to type characters.
         body_lower = response.text.lower()
         if "api-services-support@amazon.com" in response.text:
             raise RetryableError(f"Amazon dog-page CAPTCHA for {asin}")
@@ -98,7 +107,7 @@ class AmazonPriceScraper:
         return response.text
 
     def parse_price_from_json(self, soup):
-        """Primary parser: extract price from Amazon's embedded buy-box JSON blob."""
+        """Read the price from the embedded purchase-options JSON data."""
         wrapper = soup.select_one(PRICE_JSON_SELECTOR)
         if wrapper is None:
             return None
@@ -111,7 +120,7 @@ class AmazonPriceScraper:
         if not offers:
             return None
 
-        # Prefer NEW offers; fall back to the first offer of any other type
+        # Prefer a NEW offer when one is listed; otherwise use the first offer.
         for offer in offers:
             if offer.get("buyingOptionType") == "NEW" and "priceAmount" in offer:
                 return float(offer["priceAmount"])
@@ -120,18 +129,19 @@ class AmazonPriceScraper:
         return None
 
     def parse_price(self, soup):
-        # Strategy 1: embedded JSON (most stable)
+        # Try the JSON data first; it is the most reliable source on modern pages.
         price = self.parse_price_from_json(soup)
         if price is not None:
             return price
 
-        # Strategy 2: CSS selector chain
+        # Fall back to CSS selectors used in the current Amazon DOM.
         for selector in PRICE_SELECTORS:
             price = extract_price_text(soup.select_one(selector))
             if price is not None:
                 return price
 
-        # Strategy 3: whole + fraction split (older Amazon DOM)
+        # Older Amazon pages split the price into a whole-number span and a
+        # fraction span. Combine them as a fallback.
         price_whole = soup.select_one("span.a-price-whole")
         if price_whole:
             whole = price_whole.get_text(strip=True).replace(",", "").rstrip(".")
@@ -142,7 +152,7 @@ class AmazonPriceScraper:
             except ValueError:
                 pass
 
-        # Strategy 4: regex over any .a-offscreen that looks like a dollar amount
+        # Last resort: scan offscreen text for any visible dollar amount.
         for tag in soup.select(".a-offscreen"):
             text = tag.get_text(strip=True)
             if re.match(r"^\$[\d,]+\.\d{2}$", text):
@@ -180,7 +190,9 @@ class AmazonPriceScraper:
         )
 
     def get_price(self, asin):
-        time.sleep(random.uniform(3, 7))  # human-pacing delay
+        # A random delay between requests breaks the uniform timing pattern
+        # that anti-bot systems use as one of their detection signals.
+        time.sleep(random.uniform(3, 7))
 
         try:
             html = self.fetch_product_page(asin)

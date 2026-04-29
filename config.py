@@ -1,4 +1,4 @@
-# config.py: loads proxies from env, validates products
+# config.py: loads proxies from environment variable, validates products
 
 import os
 from urllib.parse import quote
@@ -13,7 +13,8 @@ class ProxyConfig(BaseModel):
 
     @property
     def url(self):
-        # quote() escapes special characters in credentials such as @, :, /, #
+        # quote() escapes special characters such as @, :, /, # in the
+        # username and password so they do not break the URL structure.
         return f"http://{quote(self.user, safe='')}:{quote(self.password, safe='')}@{self.host}:{self.port}"
 
 
@@ -30,10 +31,10 @@ class ProductConfig(BaseModel):
 
 
 def _load_proxies_from_env():
-    """Parse proxies from PROXIES env var.
+    """Parse proxies from the PROXIES env var.
 
     Format: one proxy per line, each line as host:port:user:password.
-    The password may itself contain colons (split caps at 4 fields).
+    The password may contain colons; the split is limited to 4 fields.
     """
     raw = os.environ.get("PROXIES", "").strip()
     if not raw:
@@ -47,7 +48,8 @@ def _load_proxies_from_env():
         line = line.strip()
         if not line:
             continue
-        parts = line.split(":", 3)  # cap split at 4 to allow colons in password
+        # split into 4 parts so a colon inside the password is preserved.
+        parts = line.split(":", 3)
         if len(parts) != 4:
             raise ValueError(f"Bad proxy line (expected host:port:user:pass): {line}")
         host, port, user, password = parts
