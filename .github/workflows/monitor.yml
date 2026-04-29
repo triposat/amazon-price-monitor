@@ -3,7 +3,7 @@ name: Amazon Price Monitor
 on:
   schedule:
     # Runs every 30 minutes. GitHub may delay scheduled runs by several
-    # minutes during high load — that's normal, not a bug.
+    # minutes during high load. This is normal, not a bug.
     - cron: "*/30 * * * *"
   workflow_dispatch:  # adds a "Run workflow" button on the Actions tab
 
@@ -11,7 +11,7 @@ on:
 permissions:
   contents: write
 
-# Don't allow two checks to run concurrently — they'd race on price_history.json
+# Don't allow two checks to run concurrently because they'd race on price_history.json
 concurrency:
   group: price-monitor
   cancel-in-progress: false
@@ -46,7 +46,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add price_history.json
           if git diff --staged --quiet; then
-            echo "No price history changes — skipping commit"
+            echo "No price history changes, skipping commit"
           else
             git commit -m "Update price history [skip ci]"
             git push

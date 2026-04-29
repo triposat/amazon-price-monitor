@@ -1,4 +1,4 @@
-# check_once.py — single-shot price check, designed to be invoked by cron/GitHub Actions
+# check_once.py: single-shot price check, designed to be invoked by cron/GitHub Actions
 #
 # Alert policy:
 #   Fire a Slack alert when current price is a new low vs. the last 24 hours
@@ -127,16 +127,16 @@ def main():
         if should_alert:
             assert baseline is not None  # decide() guarantees this when should_alert=True
             logger.success(
-                f"PRICE DROP! {product.name} — ${current:.2f} | {reason}"
+                f"PRICE DROP! {product.name}: ${current:.2f} | {reason}"
             )
             send_alert(result, product, baseline)
             drops_alerted += 1
         elif baseline is not None and current < baseline:
             # Drop occurred but was suppressed by threshold/cooldown
-            logger.info(f"{product.name} — ${current:.2f} | suppressed: {reason}")
+            logger.info(f"{product.name}: ${current:.2f} | suppressed: {reason}")
             drops_suppressed += 1
         else:
-            logger.info(f"{product.name} — ${current:.2f} | {reason}")
+            logger.info(f"{product.name}: ${current:.2f} | {reason}")
 
     logger.info(
         f"Cycle done. {successes} ok, {failures} failed, "

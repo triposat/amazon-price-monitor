@@ -1,6 +1,7 @@
-# config.py — loads proxies from env, validates products
+# config.py: loads proxies from env, validates products
 
 import os
+from urllib.parse import quote
 from pydantic import BaseModel, field_validator
 
 
@@ -12,7 +13,8 @@ class ProxyConfig(BaseModel):
 
     @property
     def url(self):
-        return f"http://{self.user}:{self.password}@{self.host}:{self.port}"
+        # quote() escapes special characters in credentials such as @, :, /, #
+        return f"http://{quote(self.user, safe='')}:{quote(self.password, safe='')}@{self.host}:{self.port}"
 
 
 class ProductConfig(BaseModel):
@@ -30,7 +32,8 @@ class ProductConfig(BaseModel):
 def _load_proxies_from_env():
     """Parse proxies from PROXIES env var.
 
-    Format: one proxy per line, each line as host:port:user:password
+    Format: one proxy per line, each line as host:port:user:password.
+    The password may itself contain colons (split caps at 4 fields).
     """
     raw = os.environ.get("PROXIES", "").strip()
     if not raw:
@@ -44,7 +47,7 @@ def _load_proxies_from_env():
         line = line.strip()
         if not line:
             continue
-        parts = line.split(":")
+        parts = line.split(":", 3)  # cap split at 4 to allow colons in password
         if len(parts) != 4:
             raise ValueError(f"Bad proxy line (expected host:port:user:pass): {line}")
         host, port, user, password = parts

@@ -1,4 +1,4 @@
-# alerts.py — multi-channel alerts via apprise, configured from env
+# alerts.py: multi-channel alerts via apprise, configured from env
 
 import os
 import apprise
@@ -23,6 +23,7 @@ for url in os.environ.get("APPRISE_URLS", "").strip().splitlines():
 
 def send_alert(result: PriceResult, product: ProductConfig, prior_price: float):
     """Send a price-drop alert. Caller has already verified current < prior."""
+    assert result.price is not None, "send_alert requires a non-None result.price"
     drop = prior_price - result.price
     pct = (drop / prior_price) * 100
 
@@ -36,9 +37,13 @@ def send_alert(result: PriceResult, product: ProductConfig, prior_price: float):
     )
 
     if len(notifier) > 0:
-        notifier.notify(title=title, body=body)
-        logger.success(
-            f"Alert sent for {result.asin} — ${result.price:.2f} (was ${prior_price:.2f})"
-        )
+        if notifier.notify(title=title, body=body):
+            logger.success(
+                f"Alert sent for {result.asin}: ${result.price:.2f} (was ${prior_price:.2f})"
+            )
+        else:
+            logger.error(
+                f"Alert delivery failed for {result.asin}: ${result.price:.2f} (was ${prior_price:.2f})"
+            )
     else:
         logger.warning(f"No notification services configured! {title}")
