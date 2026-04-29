@@ -2,7 +2,7 @@
 
 A scheduled price monitor that runs `check_once.py` every 30 minutes on free
 GitHub Actions. Each run adds new results to `price_history.json`, and the
-workflow commits this file back to the repository so the history is preserved
+workflow commits this file back to the repository so the history is kept
 between runs.
 
 ## Alert thresholds
@@ -16,7 +16,7 @@ channel) when **all** of the following conditions are true:
 2. The drop is **at least 2% and at least $1**. This filters out small changes
    of a few cents on low-cost items.
 3. **No alert has been sent for the same product in the last 6 hours.** This
-   prevents repeated notifications when prices change often.
+   stops repeated notifications when prices change often.
 
 If any condition fails, the script still saves the reading to history but does
 not send a notification.
@@ -131,18 +131,18 @@ configured correctly. After this, runs happen automatically every 30 minutes.
 - **GitHub pauses workflows after 60 days of repository inactivity.** This
   workflow's automatic commits count as activity, so the schedule does not
   pause in normal use.
-- **The GitHub free tier provides 2,000 Actions minutes per month for private
+- **The GitHub free tier gives 2,000 Actions minutes per month for private
   repositories.** Each run takes about 1 minute. With 48 runs per day across
   30 days, monthly usage is about 1,440 minutes, which is below the free tier
   limit. Public repositories have unlimited minutes.
-- **The workflow includes a concurrency lock.** This prevents two runs from
+- **The workflow includes a concurrency lock.** This stops two runs from
   writing to `price_history.json` at the same time. Without the lock, this
   could happen when a slow run overlaps with the next scheduled run.
 
 ## Changing the monitored products
 
 Edit `products.json` and push the change to the repository. The next scheduled
-run will use the updated list. No additional deployment step is required.
+run will use the updated list. No additional deployment step is needed.
 
 ## Changing the run frequency
 
@@ -159,7 +159,7 @@ Edit the `cron` value in `.github/workflows/monitor.yml`:
 - **The workflow run failed.** Open the failed run in the Actions tab, expand
   the failed step, and read the log output. Most failures are caused by a
   missing or incorrectly formatted `PROXIES` or `APPRISE_URLS` secret.
-- **No alerts are sent even when prices drop.** Confirm that `APPRISE_URLS` is
+- **No alerts are sent even when prices drop.** Make sure that `APPRISE_URLS` is
   configured and that your notification channel is working. You can test the
   channel from the command line:
 
@@ -167,9 +167,9 @@ Edit the `cron` value in `.github/workflows/monitor.yml`:
   apprise -vv -t "test" -b "body" "your-url"
   ```
 
-  Also verify that the price drop crosses the thresholds in `check_once.py`.
+  Also check that the price drop crosses the thresholds in `check_once.py`.
   For example, a $0.10 drop on a $30 item is below the default 2% threshold
   and will not trigger an alert.
 - **The workflow is stuck in the "queued" state.** GitHub's free runners can
-  be delayed during periods of high demand. The queue typically clears within
+  be delayed during periods of high demand. The queue usually clears within
   5 to 15 minutes.
